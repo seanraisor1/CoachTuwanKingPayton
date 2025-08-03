@@ -57,6 +57,76 @@
       --success: #22C55E;
       --danger: #EF4444;
       --warning: #F59E0B;
+      
+      /* Additional colors for orbs */
+      --primary-500: #2A3F7E;
+      --accent-400: #5B9AFF;
+      --accent-500: #3A86FF;
+      
+      /* Gradient mesh for background */
+      --gradient-mesh: radial-gradient(at 40% 20%, rgba(58, 134, 255, 0.15) 0%, transparent 50%),
+                       radial-gradient(at 80% 0%, rgba(42, 63, 126, 0.15) 0%, transparent 50%),
+                       radial-gradient(at 0% 50%, rgba(26, 39, 84, 0.15) 0%, transparent 50%);
+    }
+    
+    /* Background Effects */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--gradient-mesh);
+      opacity: 0.6;
+      z-index: -2;
+      pointer-events: none;
+    }
+    
+    /* Animated Orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.4;
+      animation: float 20s infinite ease-in-out;
+      z-index: -1;
+      pointer-events: none;
+    }
+    
+    .orb-1 {
+      width: 500px;
+      height: 500px;
+      background: var(--accent-500);
+      top: -200px;
+      left: -200px;
+      animation-delay: 0s;
+    }
+    
+    .orb-2 {
+      width: 600px;
+      height: 600px;
+      background: var(--primary-500);
+      bottom: -300px;
+      right: -300px;
+      animation-delay: 7s;
+    }
+    
+    .orb-3 {
+      width: 400px;
+      height: 400px;
+      background: var(--accent-400);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation-delay: 14s;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(50px, -50px) scale(1.1); }
+      50% { transform: translate(-30px, 30px) scale(0.9); }
+      75% { transform: translate(30px, 50px) scale(1.05); }
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
@@ -1692,6 +1762,11 @@
 </head>
 <body>
 
+  <!-- Animated Background Orbs -->
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
   <nav class="nav">
     <div class="nav__logo">FrontendDialed</div>
     <div class="nav__links">
@@ -2486,8 +2561,9 @@
       <div class="popup-close" onclick="closePopup()">×</div>
       <h2>Wait! Don't Leave Empty-Handed</h2>
       <p>Get our proven funnel template that's generated $2.3M+</p>
-      <form onsubmit="captureEmail(event)">
-        <input type="email" placeholder="Your best email" required>
+      <form onsubmit="captureEmail(event)" netlify data-netlify="true" name="email-capture">
+        <input type="hidden" name="form-name" value="email-capture">
+        <input type="email" name="email" placeholder="Your best email" required>
         <button type="submit" class="btn btn--primary">Send Me The Template</button>
       </form>
       <p class="privacy">We respect your privacy. Unsubscribe anytime.</p>
@@ -2553,13 +2629,111 @@
       document.getElementById('exit-popup').classList.remove('active');
     }
     
-    function captureEmail(event) {
+    async function captureEmail(event) {
       event.preventDefault();
-      const email = event.target.querySelector('input[type="email"]').value;
-      // Here you would send the email to your backend
-      console.log('Email captured:', email);
-      alert('Check your email! Template sent to ' + email);
-      closePopup();
+      const form = event.target;
+      const email = form.querySelector('input[type="email"]').value;
+      const button = form.querySelector('button');
+      
+      // Show loading state
+      const originalText = button.textContent;
+      button.textContent = 'Sending...';
+      button.disabled = true;
+      
+      try {
+        // Check if it's a Netlify form
+        if (form.hasAttribute('netlify')) {
+          // Netlify Forms
+          const formData = new FormData(form);
+          
+          const response = await fetch('/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(formData).toString()
+          });
+          
+          if (response.ok) {
+            handleSuccess(button, originalText);
+          } else {
+            throw new Error('Netlify form submission failed');
+          }
+          
+        } else {
+          // Formspree (replace YOUR_FORM_ID with your actual Formspree form ID)
+          const response = await fetch('https://formspree.io/f/YOUR_FORM_ID', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: email,
+              source: 'Exit Intent Popup',
+              timestamp: new Date().toISOString(),
+              page: window.location.href
+            })
+          });
+          
+          if (response.ok) {
+            handleSuccess(button, originalText);
+          } else {
+            throw new Error('Formspree submission failed');
+          }
+        }
+        
+      } catch (error) {
+        console.error('Email capture error:', error);
+        handleFallback(email, button, originalText);
+      }
+    }
+    
+    function handleSuccess(button, originalText) {
+      // Success
+      button.textContent = 'Sent! ✓';
+      button.style.background = 'var(--success)';
+      
+      setTimeout(() => {
+        alert('✅ Template sent! Check your email (including spam folder).');
+        closePopup();
+      }, 1000);
+      
+      // Track conversion (if you have analytics)
+      if (typeof gtag !== 'undefined') {
+        gtag('event', 'email_capture', {
+          'event_category': 'Lead Generation',
+          'event_label': 'Exit Intent',
+          'value': 1
+        });
+      }
+      
+      // Reset button after delay
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+        button.style.background = '';
+      }, 3000);
+    }
+    
+    function handleFallback(email, button, originalText) {
+      // Fallback: Open email client
+      const subject = encodeURIComponent('Send me the funnel template');
+      const body = encodeURIComponent('Hi Sean,\n\nI was just on your website and would love to get the funnel template.\n\nMy email: ' + email + '\n\nThanks!');
+      
+      window.open(`mailto:seanmnr20@gmail.com?subject=${subject}&body=${body}`, '_blank');
+      
+      button.textContent = 'Email opened ✓';
+      button.style.background = 'var(--warning)';
+      
+      setTimeout(() => {
+        alert('📧 Email client opened! Send the email to get your template.');
+        closePopup();
+      }, 1000);
+      
+      // Reset button after delay
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+        button.style.background = '';
+      }, 3000);
     }
     
     // Case Study Modal Functions
